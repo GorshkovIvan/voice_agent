@@ -119,11 +119,15 @@ The agent understands natural language. Examples:
 
 ```
 voice_agent/
-├── agent.py           # Main agent implementation
-├── .env               # Environment variables (not committed)
-├── .env.example       # Template for environment variables
-├── .gitignore         # Git ignore rules
-└── README.md          # This file
+├── src/
+│   ├── __init__.py       # Package exports
+│   ├── assistant.py      # VoiceAssistant class with tool definitions
+│   └── batch.py          # Batch API client, polling, task persistence
+├── agent.py              # Entry point
+├── .env                  # Environment variables (not committed)
+├── .env.example          # Template for environment variables
+├── .gitignore            # Git ignore rules
+└── README.md             # This file
 ```
 
 ## License
