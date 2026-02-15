@@ -2,14 +2,17 @@ import os
 import json
 import asyncio
 from pathlib import Path
-from openai import OpenAI
+from openai import AsyncOpenAI
 from livekit.agents import AgentSession
 
-# Doubleword batch API client
-batch_client = OpenAI(
+# Doubleword batch API client (async to avoid blocking the event loop)
+batch_client = AsyncOpenAI(
     api_key=os.getenv("DOUBLEWORD_API_KEY"),
     base_url="https://api.doubleword.ai/v1"
 )
+
+# Keep strong references to polling tasks to prevent GC (Python 3.12+)
+_background_tasks: set = set()
 
 # File to store task results
 TASKS_FILE = Path(__file__).parent.parent / "tasks_results.json"
@@ -31,16 +34,16 @@ def save_tasks(tasks: dict):
 
 async def poll_batch_job(batch_id: str, session: AgentSession, task_description: str):
     """Poll for batch job completion and notify user when done."""
-    print(f"[POLL] Started polling for job {batch_id}")
+    print(f"[POLL] Started polling for job {batch_id}", flush=True)
     while True:
         await asyncio.sleep(10)
         try:
-            print(f"[POLL] Checking status for job {batch_id}")
-            batch_status = batch_client.batches.retrieve(batch_id)
-            print(f"[POLL] Job {batch_id} status: {batch_status.status}")
+            print(f"[POLL] Checking status for job {batch_id}", flush=True)
+            batch_status = await batch_client.batches.retrieve(batch_id)
+            print(f"[POLL] Job {batch_id} status: {batch_status.status}", flush=True)
 
             if batch_status.status == "completed":
-                content = batch_client.files.content(batch_status.output_file_id)
+                content = await batch_client.files.content(batch_status.output_file_id)
                 lines = content.text.strip().split('\n')
 
                 if lines:
@@ -62,12 +65,12 @@ async def poll_batch_job(batch_id: str, session: AgentSession, task_description:
                     "result": response_content
                 }
                 save_tasks(tasks)
-                print(f"[POLL] Job {batch_id} COMPLETED - notifying user now!")
+                print(f"[POLL] Job {batch_id} COMPLETED - notifying user now!", flush=True)
 
-                await session.generate_reply(
-                    instructions=f"INTERRUPT and tell the user: Great news! The background task '{task_description}' is now complete! Ask if they want to hear the results."
-                )
-                print(f"[POLL] Notification sent for job {batch_id}")
+                # Directly speak the notification via TTS (bypasses LLM for reliability)
+                await session.interrupt(force=True)
+                session.say(f"Your task '{task_description}' is ready. Would you like me to read the results?")
+                print(f"[POLL] Notification triggered for job {batch_id}", flush=True)
                 break
 
             elif batch_status.status in ["failed", "expired", "cancelled"]:
@@ -79,11 +82,10 @@ async def poll_batch_job(batch_id: str, session: AgentSession, task_description:
                 }
                 save_tasks(tasks)
 
-                await session.generate_reply(
-                    instructions=f"Tell the user their task '{task_description}' {batch_status.status}. Apologize and offer to try again."
-                )
+                await session.interrupt(force=True)
+                session.say(f"Sorry, your task '{task_description}' has {batch_status.status}. Would you like me to try again?")
                 break
 
         except Exception as e:
-            print(f"Error polling batch job: {e}")
+            print(f"Error polling batch job: {e}", flush=True)
             continue

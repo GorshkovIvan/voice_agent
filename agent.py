@@ -1,12 +1,13 @@
 import os
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from livekit import agents
 from livekit.agents import AgentSession, RoomInputOptions
 from livekit.plugins import anthropic, elevenlabs, silero
 
 from src import VoiceAssistant
-
-load_dotenv()
 
 session_holder: list = [None]
 

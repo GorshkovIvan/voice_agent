@@ -1,0 +1,6 @@
+livekit-agents
+livekit-plugins-anthropic
+livekit-plugins-elevenlabs
+livekit-plugins-silero
+openai
+python-dotenv

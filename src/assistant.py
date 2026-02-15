@@ -1,14 +1,17 @@
 import os
 import json
 import asyncio
+import time
 import tempfile
 from livekit.agents import Agent, function_tool
 
-from .batch import batch_client, poll_batch_job, load_tasks, save_tasks
+from .batch import batch_client, poll_batch_job, load_tasks, save_tasks, _background_tasks
 
 SYSTEM_PROMPT = """You are a helpful voice assistant.
-Keep your responses concise and conversational.
+Keep ALL responses short — 2 to 3 sentences maximum. This is a voice conversation, not a written essay.
 Avoid complex formatting, bullet points, or special characters.
+
+When the user interrupts you or asks you to stop/calm down, immediately acknowledge it and stop talking about the previous topic. Always prioritize the user's latest message over continuing your previous response.
 
 IMPORTANT: For complex tasks requiring detailed work such as:
 - Creating business plans, marketing plans, or strategies
@@ -22,13 +25,14 @@ Do NOT attempt these complex tasks yourself - always use the batch tool.
 
 When a task completes, use get_task_result to read the full results.
 
-For simple questions and short conversations, respond normally."""
+For simple questions and short conversations, respond normally but keep it brief."""
 
 
 class VoiceAssistant(Agent):
     def __init__(self, session_ref: list) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
         self._session_ref = session_ref
+        self._last_submission_time: float = 0  # timestamp of last batch submission
 
     @function_tool
     async def submit_batch_task(self, task_description: str, detailed_prompt: str) -> str:
@@ -39,6 +43,12 @@ class VoiceAssistant(Agent):
             detailed_prompt: Full detailed prompt with all context and requirements for the task
         """
         try:
+            # Prevent duplicate submissions after speech interruption
+            now = time.time()
+            if now - self._last_submission_time < 60:
+                return f"A task was already submitted recently. Please wait for it to complete."
+            self._last_submission_time = now
+
             batch_request = {
                 "custom_id": f"task-{len(load_tasks()) + 1}",
                 "method": "POST",
@@ -59,9 +69,9 @@ class VoiceAssistant(Agent):
                 temp_path = f.name
 
             with open(temp_path, 'rb') as f:
-                batch_file = batch_client.files.create(file=f, purpose="batch")
+                batch_file = await batch_client.files.create(file=f, purpose="batch")
 
-            batch = batch_client.batches.create(
+            batch = await batch_client.batches.create(
                 input_file_id=batch_file.id,
                 endpoint="/v1/chat/completions",
                 completion_window="1h"
@@ -76,7 +86,9 @@ class VoiceAssistant(Agent):
             save_tasks(tasks)
 
             if self._session_ref and self._session_ref[0]:
-                asyncio.create_task(poll_batch_job(batch.id, self._session_ref[0], task_description))
+                task = asyncio.create_task(poll_batch_job(batch.id, self._session_ref[0], task_description))
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
 
             os.unlink(temp_path)
 
