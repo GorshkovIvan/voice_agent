@@ -155,7 +155,3 @@ voice_agent/
 ├── .gitignore             # Git ignore rules
 └── README.md              # This file
 ```
-
-## License
-
-MIT
