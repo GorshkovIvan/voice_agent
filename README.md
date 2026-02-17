@@ -1,6 +1,6 @@
 # Voice Agent with Batch Task Processing
 
-A real-time voice assistant built with LiveKit Agents that can offload complex tasks to a batch processing API. The agent uses Claude for conversational AI and delegates time-intensive tasks (like generating business plans) to Doubleword's batch API for thorough completion.
+A real-time voice assistant built with LiveKit Agents that can offload complex tasks to a batch processing API. The agent uses Claude for conversational AI and delegates time-intensive tasks (like data processing) to Doubleword's batch API for thorough completion.
 
 ## Architecture
 
