@@ -52,11 +52,6 @@ The agent handles complex tasks asynchronously so the user can keep chatting whi
 
 4. **Result retrieval** - When the user asks for results, the LLM calls `get_task_result` which reads from the persisted `tasks_results.json` file and speaks the content.
 
-Key implementation details:
-- The `AsyncOpenAI` client is used for polling to avoid blocking the event loop
-- Background tasks are stored in a `_background_tasks` set to prevent garbage collection on Python 3.12+
-- A timestamp-based deduplication guard prevents the same task from being submitted twice within 60 seconds (this can happen when LiveKit interrupts speech mid-tool-call and the LLM retries)
-
 ## Prerequisites
 
 - Python 3.10+ (required by `livekit-agents` for `TypeAlias` support)
